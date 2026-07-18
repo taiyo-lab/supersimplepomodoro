@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pomodoro Timer</title>
+<meta name="description" content="A minimal pomodoro timer. One button, a quiet dial, and a growing grid.">
+<meta name="theme-color" content="#e9e9e7">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='42' fill='%23f4f4f2' stroke='%235b7ca4' stroke-width='10'/%3E%3Cpath d='M50 50 L50 8 A42 42 0 0 1 92 50 Z' fill='%23cdd8e4'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #e9e9e7;
+    --blue: #5b7ca4;
+    --blue-pale: #cdd8e4;
+    --sage: #93a68c;
+    --sage-pale: #d8e0d4;
+    --tickc: #b9b9b5;
+    --face: #f4f4f2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 56px;
+    padding: 40px 24px;
+    font-family: "Helvetica Neue", system-ui, sans-serif;
+  }
+  .dial-wrap { width: 300px; height: 300px; }
+  svg { width: 100%; height: 100%; overflow: visible; }
+  .face { fill: var(--face); }
+  .pie-fg { fill: var(--blue-pale); transition: fill 0.4s; }
+  .ring { fill: none; stroke: var(--blue); stroke-width: 10; transition: stroke 0.4s; }
+  .tick { stroke: var(--tickc); stroke-width: 2; stroke-linecap: round; }
+  button {
+    font-size: 18px;
+    line-height: 1;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: none;
+    background: var(--blue);
+    color: var(--face);
+    cursor: pointer;
+    transition: background 0.4s, transform 0.15s;
+    padding-left: 4px;
+  }
+  button:hover { transform: scale(1.05); }
+  button:active { transform: scale(0.95); }
+  button.rest-color { background: var(--sage); }
+  .grass {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 8px;
+    width: 300px;
+  }
+  .cell {
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: #dcdcd9;
+    transition: background 0.3s, transform 0.3s;
+  }
+  .cell.done { background: var(--blue); }
+  .cell.pop { animation: pop 0.4s ease; }
+  @keyframes pop {
+    0% { transform: scale(0.3); }
+    60% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+<div class="dial-wrap">
+  <svg viewBox="0 0 300 300">
+    <circle class="face" cx="150" cy="150" r="128"></circle>
+    <path class="pie-fg" id="pie" d=""></path>
+    <g id="ticks"></g>
+    <circle class="ring" cx="150" cy="150" r="128"></circle>
+  </svg>
+</div>
+<button id="startBtn" aria-label="Start">▶</button>
+<div class="grass" id="grass"></div>
+<script>
+const TEST = new URLSearchParams(location.search).has("test");
+const WORK = TEST ? 5 : 25 * 60, BREAK = TEST ? 3 : 5 * 60;
+const CX = 150, CY = 150, R = 128;
+let mode = "work", remain = WORK, running = false, timer = null, done = 0;
+const $ = id => document.getElementById(id);
+
+function initTicks() {
+  const g = $("ticks");
+  const ns = "http://www.w3.org/2000/svg";
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * 2 * Math.PI;
+    const r1 = 106, r2 = 118;
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", CX + r1 * Math.sin(a));
+    line.setAttribute("y1", CY - r1 * Math.cos(a));
+    line.setAttribute("x2", CX + r2 * Math.sin(a));
+    line.setAttribute("y2", CY - r2 * Math.cos(a));
+    line.setAttribute("class", "tick");
+    g.appendChild(line);
+  }
+}
+
+const GRID = 10;
+const KEY = "pomodoro-done";
+function initGrass() {
+  const g = $("grass");
+  if (!TEST) done = parseInt(localStorage.getItem(KEY) || "0", 10) || 0;
+  const rows = Math.max(1, Math.ceil(done / GRID));
+  for (let i = 0; i < rows * GRID; i++) {
+    const c = document.createElement("div");
+    c.className = "cell" + (i < done ? " done" : "");
+    g.appendChild(c);
+  }
+}
+function addGrass() {
+  done++;
+  if (!TEST) localStorage.setItem(KEY, String(done));
+  const g = $("grass");
+  if (done > g.children.length) {
+    for (let i = 0; i < GRID; i++) {
+      const c = document.createElement("div");
+      c.className = "cell";
+      g.appendChild(c);
+    }
+  }
+  const cell = g.children[done - 1];
+  cell.classList.add("done", "pop");
+}
+
+function piePath(fraction) {
+  if (fraction >= 1) {
+    return "M " + CX + " " + CY + " m -" + R + " 0 a " + R + " " + R + " 0 1 0 " + (2 * R) + " 0 a " + R + " " + R + " 0 1 0 -" + (2 * R) + " 0";
+  }
+  if (fraction <= 0) return "";
+  const angle = fraction * 2 * Math.PI;
+  const x = CX + R * Math.sin(angle);
+  const y = CY - R * Math.cos(angle);
+  const largeArc = fraction > 0.5 ? 1 : 0;
+  return "M " + CX + " " + CY + " L " + CX + " " + (CY - R) +
+         " A " + R + " " + R + " 0 " + largeArc + " 1 " + x.toFixed(2) + " " + y.toFixed(2) + " Z";
+}
+
+function render() {
+  const total = mode === "work" ? WORK : BREAK;
+  const left = remain / total;
+  $("pie").setAttribute("d", piePath(left));
+  const work = mode === "work";
+  $("pie").style.fill = work ? "var(--blue-pale)" : "var(--sage-pale)";
+  document.querySelector(".ring").style.stroke = work ? "var(--blue)" : "var(--sage)";
+  $("startBtn").textContent = running ? "❚❚" : "▶";
+  $("startBtn").classList.toggle("rest-color", !work);
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = "sine";
+    o.frequency.value = 740;
+    g.gain.setValueAtTime(0.15, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+    o.start(); o.stop(ctx.currentTime + 0.7);
+  } catch (e) {}
+}
+
+function switchMode() {
+  if (mode === "work") addGrass();
+  mode = mode === "work" ? "break" : "work";
+  remain = mode === "work" ? WORK : BREAK;
+  render();
+}
+
+function tick() {
+  remain--;
+  if (remain <= 0) { beep(); switchMode(); }
+  render();
+}
+
+$("startBtn").onclick = () => {
+  running = !running;
+  if (running) timer = setInterval(tick, 1000);
+  else { clearInterval(timer); timer = null; }
+  render();
+};
+
+initTicks();
+initGrass();
+render();
+</script>
+</body>
+</html>
