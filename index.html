@@ -10,12 +10,12 @@
 <style>
   :root {
     --bg: #e9e9e7;
-    --blue: #5b7ca4;
-    --blue-pale: #cdd8e4;
-    --sage: #93a68c;
-    --sage-pale: #d8e0d4;
-    --tickc: #b9b9b5;
-    --face: #f4f4f2;
+    --blue: #4f7089;
+    --blue-case: #b7d3dc;
+    --sage: #6f8a6a;
+    --sage-case: #cddcc4;
+    --tickc: #2c2c2c;
+    --face: #fbfbf9;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -29,12 +29,33 @@
     padding: 40px 24px;
     font-family: "Helvetica Neue", system-ui, sans-serif;
   }
-  .dial-wrap { width: 300px; height: 300px; }
+  .case {
+    width: 320px;
+    height: 320px;
+    padding: 22px;
+    border-radius: 46px;
+    background: var(--blue-case);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.55);
+    transition: background 0.4s;
+  }
+  .dial-wrap { width: 100%; height: 100%; }
   svg { width: 100%; height: 100%; overflow: visible; }
   .face { fill: var(--face); }
-  .pie-fg { fill: var(--blue-pale); transition: fill 0.4s; }
-  .ring { fill: none; stroke: var(--blue); stroke-width: 10; transition: stroke 0.4s; }
-  .tick { stroke: var(--tickc); stroke-width: 2; stroke-linecap: round; }
+  .disk { fill: var(--blue); transition: fill 0.4s; }
+  .pie-elapsed { fill: var(--face); }
+  .ring { fill: none; stroke: rgba(0,0,0,0.15); stroke-width: 3; }
+  .hand { stroke: var(--face); stroke-width: 5; stroke-linecap: round; }
+  .knob { fill: var(--blue); stroke: var(--face); stroke-width: 3; transition: fill 0.4s; }
+  .tick { stroke: var(--tickc); stroke-width: 1.5; stroke-linecap: round; opacity: 0.55; }
+  .tick.major { stroke-width: 2.5; opacity: 0.9; }
+  .num {
+    font-size: 20px;
+    font-weight: 700;
+    fill: var(--tickc);
+    text-anchor: middle;
+    dominant-baseline: central;
+    font-family: "Helvetica Neue", system-ui, sans-serif;
+  }
   button {
     font-size: 18px;
     line-height: 1;
@@ -73,36 +94,60 @@
 </style>
 </head>
 <body>
-<div class="dial-wrap">
-  <svg viewBox="0 0 300 300">
-    <circle class="face" cx="150" cy="150" r="128"></circle>
-    <path class="pie-fg" id="pie" d=""></path>
-    <g id="ticks"></g>
-    <circle class="ring" cx="150" cy="150" r="128"></circle>
-  </svg>
+<div class="case" id="case">
+  <div class="dial-wrap">
+    <svg viewBox="0 0 300 300">
+      <circle class="face" cx="150" cy="150" r="128"></circle>
+      <circle class="disk" id="disk" cx="150" cy="150" r="128"></circle>
+      <path class="pie-elapsed" id="pie" d=""></path>
+      <g id="ticks"></g>
+      <circle class="ring" cx="150" cy="150" r="128"></circle>
+      <line class="hand" id="hand" x1="150" y1="150" x2="150" y2="30"></line>
+      <circle class="knob" id="knob" cx="150" cy="150" r="9"></circle>
+    </svg>
+  </div>
 </div>
 <button id="startBtn" aria-label="Start">▶</button>
 <div class="grass" id="grass"></div>
 <script>
 const TEST = new URLSearchParams(location.search).has("test");
-const WORK = TEST ? 5 : 25 * 60, BREAK = TEST ? 3 : 5 * 60;
+const WORK_MIN = 25, BREAK_MIN = 5;
+const WORK = TEST ? 5 : WORK_MIN * 60, BREAK = TEST ? 3 : BREAK_MIN * 60;
 const CX = 150, CY = 150, R = 128;
 let mode = "work", remain = WORK, running = false, timer = null, done = 0;
 const $ = id => document.getElementById(id);
 
-function initTicks() {
+function angleForValue(value, totalMin) {
+  return ((totalMin - value) / totalMin) * 2 * Math.PI;
+}
+
+function renderTicks() {
   const g = $("ticks");
+  g.innerHTML = "";
   const ns = "http://www.w3.org/2000/svg";
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * 2 * Math.PI;
-    const r1 = 106, r2 = 118;
+  const totalMin = mode === "work" ? WORK_MIN : BREAK_MIN;
+  const majorStep = mode === "work" ? 5 : 1;
+  for (let m = 0; m < totalMin; m++) {
+    const a = angleForValue(m, totalMin);
+    const isMajor = m % majorStep === 0;
+    const r1 = isMajor ? 104 : 112, r2 = 122;
     const line = document.createElementNS(ns, "line");
     line.setAttribute("x1", CX + r1 * Math.sin(a));
     line.setAttribute("y1", CY - r1 * Math.cos(a));
     line.setAttribute("x2", CX + r2 * Math.sin(a));
     line.setAttribute("y2", CY - r2 * Math.cos(a));
-    line.setAttribute("class", "tick");
+    line.setAttribute("class", isMajor ? "tick major" : "tick");
     g.appendChild(line);
+
+    if (isMajor) {
+      const rNum = 90;
+      const text = document.createElementNS(ns, "text");
+      text.setAttribute("x", CX + rNum * Math.sin(a));
+      text.setAttribute("y", CY - rNum * Math.cos(a));
+      text.setAttribute("class", "num");
+      text.textContent = m;
+      g.appendChild(text);
+    }
   }
 }
 
@@ -148,11 +193,16 @@ function piePath(fraction) {
 
 function render() {
   const total = mode === "work" ? WORK : BREAK;
-  const left = remain / total;
-  $("pie").setAttribute("d", piePath(left));
+  const elapsed = 1 - remain / total;
+  $("pie").setAttribute("d", piePath(elapsed));
   const work = mode === "work";
-  $("pie").style.fill = work ? "var(--blue-pale)" : "var(--sage-pale)";
-  document.querySelector(".ring").style.stroke = work ? "var(--blue)" : "var(--sage)";
+  $("disk").style.fill = work ? "var(--blue)" : "var(--sage)";
+  $("knob").style.fill = work ? "var(--blue)" : "var(--sage)";
+  $("case").style.background = work ? "var(--blue-case)" : "var(--sage-case)";
+  const handAngle = elapsed * 2 * Math.PI;
+  const handR = 116;
+  $("hand").setAttribute("x2", CX + handR * Math.sin(handAngle));
+  $("hand").setAttribute("y2", CY - handR * Math.cos(handAngle));
   $("startBtn").textContent = running ? "❚❚" : "▶";
   $("startBtn").classList.toggle("rest-color", !work);
 }
@@ -174,6 +224,7 @@ function switchMode() {
   if (mode === "work") addGrass();
   mode = mode === "work" ? "break" : "work";
   remain = mode === "work" ? WORK : BREAK;
+  renderTicks();
   render();
 }
 
@@ -190,7 +241,7 @@ $("startBtn").onclick = () => {
   render();
 };
 
-initTicks();
+renderTicks();
 initGrass();
 render();
 </script>
