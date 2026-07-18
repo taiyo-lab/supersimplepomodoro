@@ -11,9 +11,9 @@
   :root {
     --bg: #e9e9e7;
     --blue: #4f7089;
-    --blue-case: #b7d3dc;
+    --blue-knob: #9cc2d1;
     --sage: #6f8a6a;
-    --sage-case: #cddcc4;
+    --sage-knob: #b7cda8;
     --tickc: #2c2c2c;
     --face: #fbfbf9;
   }
@@ -34,18 +34,15 @@
     height: 320px;
     padding: 22px;
     border-radius: 46px;
-    background: var(--blue-case);
+    background: var(--face);
     box-shadow: 0 10px 24px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.55);
-    transition: background 0.4s;
   }
   .dial-wrap { width: 100%; height: 100%; }
   svg { width: 100%; height: 100%; overflow: visible; }
-  .face { fill: var(--face); }
   .disk { fill: var(--blue); transition: fill 0.4s; }
   .pie-elapsed { fill: var(--face); }
-  .ring { fill: none; stroke: rgba(0,0,0,0.15); stroke-width: 3; }
-  .hand { stroke: var(--face); stroke-width: 5; stroke-linecap: round; }
-  .knob { fill: var(--blue); stroke: var(--face); stroke-width: 3; transition: fill 0.4s; }
+  .hand { stroke: var(--blue-knob); stroke-width: 4; stroke-linecap: round; transition: stroke 0.4s; }
+  .knob { fill: var(--blue-knob); transition: fill 0.4s; }
   .tick { stroke: var(--tickc); stroke-width: 1.5; stroke-linecap: round; opacity: 0.55; }
   .tick.major { stroke-width: 2.5; opacity: 0.9; }
   .num {
@@ -97,11 +94,9 @@
 <div class="case" id="case">
   <div class="dial-wrap">
     <svg viewBox="0 0 300 300">
-      <circle class="face" cx="150" cy="150" r="128"></circle>
       <circle class="disk" id="disk" cx="150" cy="150" r="128"></circle>
       <path class="pie-elapsed" id="pie" d=""></path>
       <g id="ticks"></g>
-      <circle class="ring" cx="150" cy="150" r="128"></circle>
       <line class="hand" id="hand" x1="150" y1="150" x2="150" y2="30"></line>
       <circle class="knob" id="knob" cx="150" cy="150" r="9"></circle>
     </svg>
@@ -197,12 +192,14 @@ function render() {
   $("pie").setAttribute("d", piePath(elapsed));
   const work = mode === "work";
   $("disk").style.fill = work ? "var(--blue)" : "var(--sage)";
-  $("knob").style.fill = work ? "var(--blue)" : "var(--sage)";
-  $("case").style.background = work ? "var(--blue-case)" : "var(--sage-case)";
+  $("knob").style.fill = work ? "var(--blue-knob)" : "var(--sage-knob)";
+  $("hand").style.stroke = work ? "var(--blue-knob)" : "var(--sage-knob)";
   const handAngle = elapsed * 2 * Math.PI;
-  const handR = 116;
-  $("hand").setAttribute("x2", CX + handR * Math.sin(handAngle));
-  $("hand").setAttribute("y2", CY - handR * Math.cos(handAngle));
+  const handR1 = 0, handR2 = 34;
+  $("hand").setAttribute("x1", CX + handR1 * Math.sin(handAngle));
+  $("hand").setAttribute("y1", CY - handR1 * Math.cos(handAngle));
+  $("hand").setAttribute("x2", CX + handR2 * Math.sin(handAngle));
+  $("hand").setAttribute("y2", CY - handR2 * Math.cos(handAngle));
   $("startBtn").textContent = running ? "❚❚" : "▶";
   $("startBtn").classList.toggle("rest-color", !work);
 }
