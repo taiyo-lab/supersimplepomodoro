@@ -84,10 +84,14 @@
     background: var(--face);
     box-shadow: 0 10px 24px var(--shadow-outer), inset 0 2px 0 var(--shadow-inner);
     cursor: pointer;
-    transition: transform 0.15s, background 0.3s, box-shadow 0.3s;
+    transition: transform 0.15s, background 0.3s, box-shadow 0.4s, opacity 0.4s;
   }
   .case:hover { transform: scale(1.01); }
   .case:active { transform: scale(0.99); }
+  .case.idle {
+    opacity: 0.8;
+    box-shadow: 0 4px 10px var(--shadow-outer), inset 0 1px 0 var(--shadow-inner);
+  }
   .theme-toggle {
     position: fixed;
     top: 20px;
@@ -126,7 +130,7 @@
 </head>
 <body>
 <button class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme"></button>
-<div class="case" id="case" role="button" tabindex="0" aria-label="Start or pause">
+<div class="case idle" id="case" role="button" tabindex="0" aria-label="Start or pause">
   <div class="dial-wrap">
     <svg viewBox="0 0 300 300">
       <circle class="disk" id="disk" cx="150" cy="150" r="128"></circle>
@@ -142,7 +146,7 @@ const TEST = new URLSearchParams(location.search).has("test");
 const WORK_MIN = 25, BREAK_MIN = 5;
 const WORK = TEST ? 5 : WORK_MIN * 60, BREAK = TEST ? 3 : BREAK_MIN * 60;
 const CX = 150, CY = 150, R = 128;
-let mode = "work", remain = WORK, running = false, timer = null;
+let mode = "work", remain = WORK, running = false, rafId = null, lastTime = null;
 const $ = id => document.getElementById(id);
 
 function angleForValue(value, totalMin) {
@@ -228,16 +232,27 @@ function switchMode() {
   render();
 }
 
-function tick() {
-  remain--;
+function loop(now) {
+  if (!running) return;
+  if (lastTime === null) lastTime = now;
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+  remain -= dt;
   if (remain <= 0) { beep(); switchMode(); }
   render();
+  rafId = requestAnimationFrame(loop);
 }
 
 function toggleRunning() {
   running = !running;
-  if (running) timer = setInterval(tick, 1000);
-  else { clearInterval(timer); timer = null; }
+  $("case").classList.toggle("idle", !running);
+  if (running) {
+    lastTime = null;
+    rafId = requestAnimationFrame(loop);
+  } else if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
   render();
 }
 
